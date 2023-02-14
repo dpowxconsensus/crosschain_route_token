@@ -75,11 +75,6 @@ describe("Router Token", function () {
   it("gateway Setup and nft deployment to chains", () => {});
 
   it("cross chain token transfer", async function () {
-    // for testing just comment if block at line 490 in GatewayUpgradeable.sol in evm node module, I will figure out the errors
-    /*
-              if (block.timestamp > crossTalkPayload.expTimestamp) 
-    */
-
     // _totalSupply should be minted to localSigner
     const expectedBalance = await BigNumber.from("10000000000000000000000");
 

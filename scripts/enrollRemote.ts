@@ -17,7 +17,7 @@ async function main() {
 
   // hard coded for polygonmumbai and bsctestnet here
   let remoteChain;
-  if (network.name == "polygonmumbai") remoteChain = "bsctestnet";
+  if (network.name == "polygonmumbai") remoteChain = "goerli";
   else remoteChain = "polygonmumbai";
 
   const remoteChainId = config[remoteChain].chainId;

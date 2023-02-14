@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import "evm-gateway-contract/contracts/ICrossTalkApplication.sol";
 import "evm-gateway-contract/contracts/Utils.sol";
-import "@routerprotocol/router-crosstalk-utils/contracts/CrossTalkUtils.sol";
+import "evm-gateway-contract/contracts/IGateway.sol";
 
 contract RouterProtocol is
     Initializable,
@@ -59,32 +59,36 @@ contract RouterProtocol is
     function sendRPTokenCrossChain(
         uint64 _dstChainType,
         string memory _dstChainId, // it can be uint, why it is string?
-        uint64 expiryDurationInSeconds,
+        uint64 expiryTimestamp,
         uint64 destGasPrice,
         address to,
         uint256 amount
     ) public {
         bytes memory payload = abi.encode(amount, to, msg.sender);
 
-        uint64 expiryTimestamp = uint64(block.timestamp) +
-            expiryDurationInSeconds;
-        Utils.DestinationChainParams memory destChainParams = Utils
-            .DestinationChainParams(
+        // burn token on src chain
+        _burn(msg.sender, amount);
+
+        if (expiryTimestamp == 0) {
+            expiryTimestamp = type(uint64).max;
+        }
+
+        bytes[] memory addresses = new bytes[](1);
+        addresses[0] = ourContractOnChains[_dstChainType][_dstChainId];
+        bytes[] memory payloads = new bytes[](1);
+        payloads[0] = payload;
+
+        IGateway(gatewayContract).requestToDest(
+            Utils.RequestArgs(expiryTimestamp, false, Utils.FeePayer.USER),
+            Utils.AckType(Utils.AckType.NO_ACK),
+            Utils.AckGasParams(destGasLimit, destGasPrice),
+            Utils.DestinationChainParams(
                 destGasLimit,
                 destGasPrice,
                 _dstChainType,
                 _dstChainId
-            );
-
-        // burn token on src chain
-        _burn(msg.sender, amount);
-
-        CrossTalkUtils.singleRequestWithoutAcknowledgement(
-            gatewayContract,
-            expiryTimestamp,
-            destChainParams,
-            ourContractOnChains[_dstChainType][_dstChainId], // destination contract address
-            payload
+            ),
+            Utils.ContractCalls(payloads, addresses)
         );
 
         emit sent(msg.sender, to, _dstChainId, amount);

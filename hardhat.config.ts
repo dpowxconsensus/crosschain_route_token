@@ -132,6 +132,15 @@ module.exports = {
           },
         },
       },
+      {
+        version: "0.8.16",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200,
+          },
+        },
+      },
     ],
   },
 
@@ -177,6 +186,7 @@ module.exports = {
     apiKey: {
       polygonMumbai: process.env.POLYGON_API_KEY,
       bscTestnet: process.env.BSC_TESTNET_API_KEY,
+      goerli: process.env.BSC_TESTNET_API_KEY, // update
     },
   },
 };
