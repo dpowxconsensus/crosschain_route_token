@@ -186,7 +186,7 @@ module.exports = {
     apiKey: {
       polygonMumbai: process.env.POLYGON_API_KEY,
       bscTestnet: process.env.BSC_TESTNET_API_KEY,
-      goerli: process.env.BSC_TESTNET_API_KEY, // update
+      goerli: process.env.ETHERSCAN_API,
     },
   },
 };

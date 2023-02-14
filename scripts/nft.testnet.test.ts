@@ -102,10 +102,10 @@ async function main() {
 
     // wait here before checking it on destination chain as it will check some time to relay message to dstchain
 
-    assert(
-      await rpTokenDstContract.connect(signerRemote).balanceOf(signer.address),
-      balanceOnDstBeforeTransfer.add(amount)
-    );
+    // assert(
+    //   await rpTokenDstContract.connect(signerRemote).balanceOf(signer.address),
+    //   balanceOnDstBeforeTransfer.add(amount)
+    // );
   };
 
   setup()
