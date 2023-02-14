@@ -24,4 +24,3 @@ export default {
     gatewayContractAddress: "",
   },
 };
-1000000 100
