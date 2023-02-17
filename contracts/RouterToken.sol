@@ -107,6 +107,7 @@ contract RouterProtocol is
                 keccak256(ourContractOnChains[srcChainType][srcChainId]),
             "Invalid src chain"
         );
+
         (uint256 amount, address to, address from) = abi.decode(
             payload,
             (uint256, address, address)

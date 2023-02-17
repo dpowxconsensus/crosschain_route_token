@@ -13,7 +13,7 @@ async function main() {
   // setting remote for current network, we can create task for it
   const nftAddress = deploy[network.name];
   const [signer] = await ethers.getSigners();
-  const nftContract = await ethers.getContractAt(abi, nftAddress, signer);
+  const tpTokenContract = await ethers.getContractAt(abi, nftAddress, signer);
 
   // hard coded for polygonmumbai and bsctestnet here
   let remoteChain;
@@ -24,7 +24,7 @@ async function main() {
   const remoteChainType = config[remoteChain].chainType;
   const remoteChainContractAddress = deploy[remoteChain];
 
-  const tx = await nftContract.setContractOnChain(
+  const tx = await tpTokenContract.setContractOnChain(
     remoteChainType,
     remoteChainId,
     remoteChainContractAddress

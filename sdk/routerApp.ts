@@ -1,19 +1,27 @@
-import { expect } from "chai";
 import { ethers, upgrades, network } from "hardhat";
+import { MultiProvider } from "./providers/MultiProvider";
+import { ChainName } from "./types";
+import { MultiGeneric } from "./utils/MultiGeneric";
 const { utils } = ethers;
+import { Gateway_Factory } from "./core/contracts";
+import { Door } from "./core/door";
 
 export class RouterApp {
-  chainId: string = "1";
-  chainType: number = 0;
+  // door -> to keep track of event which went throught door or not
+  door: Door;
+  multiProvider: MultiProvider;
+
   validators: any = []; // for now any, will change it
-  powers: any = [];
+  powers: number[] = [];
   valsetNonce: number = 0;
   RELAYER_ROUTER_ADDRESS =
     "router1hrpna9v7vs3stzyd4z3xf00676kf78zpe2u5ksvljswn2vnjp3ys8kpdc7";
   REQ_FROM_SOURCE_METHOD_NAME =
     "0x7265717565737446726f6d536f75726365000000000000000000000000000000";
 
-  constructor() {
+  constructor(multiProvider: MultiProvider) {
+    this.multiProvider = multiProvider;
+    this.door = new Door();
     // for now I am hardcoding validator and their powers and valsetNonce
     (async () => {
       const [validator] = await ethers.getSigners();
@@ -22,9 +30,8 @@ export class RouterApp {
     })();
   }
 
-  async deliver(dispatch, gateway) {
+  async deliver(dispatch, remoteGateway) {
     const [validator] = await ethers.getSigners();
-
     const {
       applicationContract,
       eventIdentifier,
@@ -38,38 +45,35 @@ export class RouterApp {
 
     let caller = applicationContract; // contract address from where event is emitted
 
-    caller = caller.toLowerCase();
-    // console.log(caller, destContractAddresses[0]);
-
     const handlerBytes = destContractAddresses[0];
 
     let encoded_data = utils.defaultAbiCoder.encode(
       [
-        "bytes32",
-        "uint64",
-        "uint64",
-        "uint64",
-        "string",
-        "string",
-        "uint64",
-        "bytes",
-        "bool",
-        "uint64",
-        "bytes[]",
-        "bytes[]",
+        "bytes32", // REQUEST_FROM_SOURCE_METHOD_NAME
+        "uint64", // crossTalkPayload.eventIdentifier
+        "uint64", // crossTalkPayload.crossTalkNonce
+        "uint64", // dst chainType
+        "string", // dst chainId
+        "string", // crossTalkPayload.sourceParams.chainId,
+        "uint64", // crossTalkPayload.sourceParams.chainType
+        "bytes", // crossTalkPayload.sourceParams.caller
+        "bool", // crossTalkPayload.isAtomic
+        "uint64", // crossTalkPayload.expTimestamp,
+        "bytes[]", // crossTalkPayload.contractCalls.destContractAddresses
+        "bytes[]", // crossTalkPayload.contractCalls.payloads
       ],
       [
         this.REQ_FROM_SOURCE_METHOD_NAME,
         eventIdentifier,
         srcChainParams.crossTalkNonce,
-        srcChainParams.chainType,
-        srcChainParams.chainId,
+        destChainParams.destChainType,
+        destChainParams.destChainId,
         srcChainParams.chainId,
         srcChainParams.chainType,
         caller,
-        false,
+        srcChainParams.isAtomicCalls,
         srcChainParams.expTimestamp,
-        [handlerBytes],
+        destContractAddresses,
         payloads,
       ]
     );
@@ -96,7 +100,7 @@ export class RouterApp {
       },
       contractCalls: {
         payloads,
-        destContractAddresses: [handlerBytes],
+        destContractAddresses,
       },
       isReadCall: false,
     };
@@ -107,38 +111,51 @@ export class RouterApp {
       valsetNonce: this.valsetNonce,
     };
 
-    await gateway.requestFromSource(_currentValset, _sigs, crossTalkPayload);
+    await (
+      await remoteGateway.requestFromSource(
+        _currentValset,
+        _sigs,
+        crossTalkPayload
+      )
+    ).wait();
   }
 
-  async processOutbound(gateway) {
-    const reqToRouterFilter = gateway.filters.RequestToDestEvent();
-    const dispatches = await gateway.queryFilter(reqToRouterFilter);
-    // console.log(dispatches);
+  async processOutbound(localGateway, remoteGateway) {
+    // we can create utils for event
+    const reqToRouterFilter = localGateway.filters.RequestToDestEvent();
+    const dispatches = await localGateway.queryFilter(reqToRouterFilter);
+
     for (const dispatch of dispatches) {
-      // we can create inbox class for keeping track of message
       const { eventIdentifier } = dispatch.args;
-
-      // check from inbox that eventIdentifier is processed or not
-      //   then
-
-      await this.deliver(dispatch, gateway);
+      if (this.door.isOpened(eventIdentifier)) {
+        await this.deliver(dispatch, remoteGateway);
+        this.door.close(eventIdentifier, dispatch);
+      }
     }
   }
 
-  // it will deploy core contracts for cross-talk
-  async deploy(signer) {
-    // let's  deploy gateway contract
-    const Gateway = await ethers.getContractFactory("GatewayUpgradeable");
-    const gateway = await Gateway.connect(signer).deploy();
-    await gateway.deployed();
-    await gateway.initialize(
-      this.chainId,
-      this.chainType,
-      this.validators,
-      this.powers,
-      this.valsetNonce
-    );
+  // it will deploy core [Gateway] contracts for cross-talk
+  async setup() {
+    const chainMap = {};
+    await Promise.all(
+      Object.keys(this.multiProvider.chainMap).map(async (chain) => {
+        const connection = this.multiProvider.chainMap[chain];
 
-    return gateway;
+        const gateway = await (await Gateway_Factory)
+          .connect(connection.signer)
+          .deploy();
+        await gateway.initialize(
+          connection.chainId,
+          connection.chainType,
+          this.validators,
+          this.powers,
+          this.valsetNonce
+        );
+        chainMap[chain] = {
+          gateway,
+        };
+      })
+    );
+    return chainMap;
   }
 }
